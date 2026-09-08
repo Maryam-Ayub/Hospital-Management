@@ -1,0 +1,9 @@
+# Python
+__pycache__/
+*.pyc
+
+# SQLite database
+database.db
+
+# Environment variables / secrets
+.env
