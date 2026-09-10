@@ -6,10 +6,10 @@
 </head>
 <body>
 
-    <h2>signin</h2>
+    <h2>sign in</h2>
     <input type="text" id="username_signin" placeholder="Username">
     <input type="password" id="password_signin" placeholder="Password">
-    <button onclick="signup()">SignUp</button>
+    <button onclick="signin()">Sign in</button>
     <p id="SignupStatus"></p>
     
     
@@ -19,8 +19,41 @@
     <button onclick="login()">Login</button>
     <p id="loginStatus"></p>
     
+    <h2>Admin sign up</h2>
+    <input type="text" id="username_setadmin" placeholder="Username">
+    <input type="password" id="password_setadmin" placeholder="Password">
     
-   
+    <button onclick="set_admin()">Sign up as Admin</button>
+    <p id="SignInStatus"></p>
+
+    <h2>Admin login</h2>
+    <input type="text" id="username_admin" placeholder="Username">  
+    <input type="password" id="password_admin" placeholder="Password">
+    <button onclick="admin_login()">Login as Admin</button> 
+    <p id="adminLoginStatus"></p>
+
+    <h2>Add Patient</h2>
+<input type="text" id="name" placeholder="Name">
+<input type="number" id="age" placeholder="Age">
+
+<select id="gender">
+    <option value="" disabled selected>Select Gender</option>
+    <option value="male">Male</option>
+    <option value="female">Female</option>
+    <option value="other">Other</option>
+</select>
+
+<select id="diagnosis">
+    <option value="" disabled selected>Select Diagnosis</option>
+    <option value="hypertension">Hypertension</option>
+    <option value="diabetes">Diabetes</option>
+    <option value="asthma">Asthma</option>
+    <option value="flu">Flu</option>
+    <option value="other">Other</option>
+</select>
+
+<button onclick="add_patient()">Add Patient</button>
+<p id="addPatientStatus"></p>
 
     <script src="script.js"></script>
 </body>
