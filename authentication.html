@@ -55,6 +55,25 @@
 <button onclick="add_patient()">Add Patient</button>
 <p id="addPatientStatus"></p>
 
+<hr>
+
+<h2>Patients</h2>
+<button onclick="show_patients()">Load Patients</button>
+
+<table id="patientsTable" border="1" cellpadding="8" cellspacing="0">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Age</th>
+            <th>Gender</th>
+            <th>Diagnosis</th>
+        </tr>
+    </thead>
+    <tbody id="patientsTableBody">
+        <!-- rows get inserted here by JS -->
+    </tbody>
+</table>
+<p id="patientsStatus"></p>
     <script src="script.js"></script>
 </body>
 </html>

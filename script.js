@@ -108,3 +108,39 @@ async function add_patient() {
     const data = await response.json();
     document.getElementById("addPatientStatus").innerText = data.message || data.error;
 }
+//all_Patients  
+
+async function show_patients() {
+    const response = await fetch(BASE_URL + "/get/patients", {
+        method: "GET",
+        headers: {
+            "Authorization": "Bearer " + localStorage.getItem("access_token")
+        }
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+        document.getElementById("patientsList").innerHTML =
+            `<p>Error: ${data.error || data.message || "Could not load patients"}</p>`;
+        return;
+    }
+
+    const patientsList = document.getElementById("patientsTableBody");
+    patientsList.innerHTML = "";
+
+    if (data.length > 0) {
+        data.forEach(patient => {
+            const patientDiv = document.createElement("div");
+            patientDiv.innerHTML = `
+                <p><strong>Name:</strong> ${patient.name}</p>
+                <p><strong>Age:</strong> ${patient.age}</p>
+                <p><strong>Gender:</strong> ${patient.gender}</p>
+                <p><strong>Diagnosis:</strong> ${patient.diagnosis}</p>
+                <hr>
+            `;
+            patientsList.appendChild(patientDiv);
+        });
+    } else {
+        patientsTableBody.innerHTML = "<p>No patients found.</p>";
+    }
+}

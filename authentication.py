@@ -225,8 +225,25 @@ def add_patients():
     add_patients_to_db(name, age, gender, diagnosis)
     return jsonify({"message": "Patient added successfully"}), 201
 
+@app.route('/get/patients', methods=['GET'])
+@jwt_required()
+def get_patients():
+    claims = get_jwt()
+    if claims.get("role") != "admin":
+        return jsonify({"error": "Admins only"}), 403
 
-    
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM patients')
+        patients = cursor.fetchall()
+        return jsonify([dict(row) for row in patients]), 200
+    except sqlite3.Error:
+        return jsonify({"error": "Database error"}), 500
+    finally:
+        if conn:
+            conn.close()
 
 if __name__ == "__main__":
     init_db()
