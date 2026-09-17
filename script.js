@@ -20,7 +20,7 @@ async function signin() {
     }
 }
 
-// LOGIN
+// LOGIN 
 async function login() {
     const username = document.getElementById("username").value;
     const password = document.getElementById("password").value;
@@ -80,6 +80,7 @@ async function admin_login() {
     if (response.ok) {
         localStorage.setItem("access_token", data.access_token);
         document.getElementById("adminLoginStatus").innerText = "Admin Login successful!";
+        window.location.href='dashboard.html'
     }
     else {
         document.getElementById("adminLoginStatus").innerText = "Error: " + data.message;
@@ -120,7 +121,7 @@ async function show_patients() {
     const data = await response.json();
 
     if (!response.ok) {
-        document.getElementById("patientsList").innerHTML =
+        document.getElementById("patientsTableBody").innerHTML =
             `<p>Error: ${data.error || data.message || "Could not load patients"}</p>`;
         return;
     }
@@ -130,17 +131,38 @@ async function show_patients() {
 
     if (data.length > 0) {
         data.forEach(patient => {
-            const patientDiv = document.createElement("div");
-            patientDiv.innerHTML = `
-                <p><strong>Name:</strong> ${patient.name}</p>
-                <p><strong>Age:</strong> ${patient.age}</p>
-                <p><strong>Gender:</strong> ${patient.gender}</p>
-                <p><strong>Diagnosis:</strong> ${patient.diagnosis}</p>
-                <hr>
+            const patientrow = document.createElement("tr");
+            patientrow.innerHTML = `
+                <td>${patient.name}</td>
+                <td>${patient.age}</td>
+                <td>${patient.gender}</td>
+                <td>${patient.diagnosis}</td>
             `;
-            patientsList.appendChild(patientDiv);
+            patientsList.appendChild(patientrow);
         });
     } else {
         patientsTableBody.innerHTML = "<p>No patients found.</p>";
     }
+}
+// add doctors 
+async function add_doctor() {
+    const name = document.getElementById("doctor_name").value.trim();
+    const specialization = document.getElementById("doctor_specialization").value.trim();
+    const department = document.getElementById("department").value.trim();
+
+    if (!name || !specialization || !department) {
+        document.getElementById("doctorStatus").innerText = "All fields are required";
+        return;
+    }
+
+    const response = await fetch(BASE_URL + "/add/doctor", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + localStorage.getItem("access_token")
+        },
+        body: JSON.stringify({ name, specialization, department })
+    });
+    const data = await response.json();
+    document.getElementById("doctorStatus").innerText = data.message || data.error;
 }

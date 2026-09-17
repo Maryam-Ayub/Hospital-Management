@@ -56,7 +56,8 @@ def init_db():
         CREATE TABLE IF NOT EXISTS doctors (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            specialization TEXT NOT NULL
+            specialization TEXT NOT NULL,
+            department TEXT NOT NULL
         )
     ''')
     conn.commit()
@@ -156,7 +157,7 @@ def set_admin():
             return jsonify({
                 'message': 'Admin signup successful'
             }), 201
-        except sqlite3.IntegrityError:
+        except sqlite3.Error as e:
             return jsonify({'message': 'Username already exists'}), 400
         finally:
             conn.close()
@@ -244,7 +245,40 @@ def get_patients():
     finally:
         if conn:
             conn.close()
+def add_doctors_to_db(name, specialization , department):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+       cursor.execute('INSERT INTO doctors (name, specialization, department) VALUES(?,?,?)', (name, specialization, department))
+       conn.commit()
 
+    except sqlite3.Error:
+        cursor.rollback()
+        raise
+    finally:
+        conn.close()
+
+@app.route('/add/doctor', methods=['POST'])
+@jwt_required()
+def add_doctors():
+    claims = get_jwt()
+    if claims.get('role') != 'admin':
+        return jsonify({'error': 'Admins only'}), 403
+    
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+    try:
+        name = data.get('name', '')
+        specialization = data.get('specialization', '')
+        department = data.get('department', '')
+        if not name or not specialization or not department:
+            return jsonify({'error': 'Name, specialization, and department are required'}), 400
+
+        add_doctors_to_db(name, specialization, department)
+        return jsonify({'message': 'Doctor added successfully'}), 201
+    except Exception as e:
+        return jsonify({'error': 'An error occurred while adding the doctor'}), 500         
 if __name__ == "__main__":
     init_db()
     app.run(debug=True)

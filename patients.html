@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <h2>Add Patient</h2>
+<input type="text" id="name" placeholder="Name">
+<input type="number" id="age" placeholder="Age">
+
+<select id="gender">
+    <option value="" disabled selected>Select Gender</option>
+    <option value="male">Male</option>
+    <option value="female">Female</option>
+    <option value="other">Other</option>
+</select>
+
+<select id="diagnosis">
+    <option value="" disabled selected>Select Diagnosis</option>
+    <option value="hypertension">Hypertension</option>
+    <option value="diabetes">Diabetes</option>
+    <option value="asthma">Asthma</option>
+    <option value="flu">Flu</option>
+    <option value="other">Other</option>
+</select>
+
+<button onclick="add_patient()">Add Patient</button>
+<p id="addPatientStatus"></p>
+
+<hr>
+
+<h2>Patients</h2>
+<button onclick="show_patients()">Load Patients</button>
+
+<table id="patients-Table" border="1" cellpadding="8" cellspacing="0">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Age</th>
+            <th>Gender</th>
+            <th>Diagnosis</th>
+        </tr>
+    </thead>
+    <tbody id="patients-Table-Body">
+        <!-- rows get inserted here by JS -->
+    </tbody>
+</table>
+<p id="patientsStatus"></p>
+<script src="script.js"></script>
+</body>
+</html>

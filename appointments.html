@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <h1>Appointments</h1>
+
+<h2>Book Appointment</h2>
+
+<input type="number" id="patient_id"
+       placeholder="Patient ID">
+
+<input type="number" id="doctor_id"
+       placeholder="Doctor ID">
+
+<input type="date" id="appointment_date">
+
+<button onclick="add_appointment()">
+    Book Appointment
+</button>
+
+<p id="appointmentStatus"></p>
+
+<hr>
+<h2>Appointments List</h2>
+
+<table border="1">
+    <thead>
+        <tr>
+            <th>Patient</th>
+            <th>Doctor</th>
+            <th>Date</th>
+        </tr>
+    </thead>
+
+    <tbody id="appointmentsTableBody">
+    </tbody>
+
+</table>
+<br>
+<button onclick="window.location.href='dashboard.html'">
+    Back to Dashboard
+</button>
+
+<script src="script.js"></script>
+</body>
+</html>
