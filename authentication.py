@@ -54,11 +54,11 @@ def init_db():
     ''')
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS doctors (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            specialization TEXT NOT NULL,
-            department TEXT NOT NULL
-        )
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    specialization TEXT NOT NULL,
+    department TEXT NOT NULL
+)
     ''')
     conn.commit()
     conn.close()
@@ -66,6 +66,7 @@ def init_db():
 def get_db_connection():
     conn = sqlite3.connect('database.db')
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
 @app.route('/signin', methods=['POST'])
@@ -158,7 +159,8 @@ def set_admin():
                 'message': 'Admin signup successful'
             }), 201
         except sqlite3.Error as e:
-            return jsonify({'message': 'Username already exists'}), 400
+            print("Database error:", e)
+            return jsonify({'message': 'Database error'}), 500
         finally:
             conn.close()
 
@@ -170,12 +172,7 @@ def get_user_by_username(username):
     conn.close()
     return user
 
-def add_patients_to_db(name, age, gender, diagnosis):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('INSERT INTO patients (name, age, gender, diagnosis) VALUES (?, ?, ?, ?)', (name, age, gender, diagnosis))
-    conn.commit() 
-    conn.close()      
+     
 
 # Admin Login
 @app.route('/admin/login', methods=['POST'])
@@ -183,8 +180,6 @@ def admin_login():
     data = request.get_json(silent=True) or {}
     username = data.get("username", "")
     password = data.get("password", "")
-    
-
     
     user = get_user_by_username(username)  # fetch from DB
     if not user or not bcrypt.check_password_hash(user["password"], password):
@@ -197,7 +192,16 @@ def admin_login():
     )
     return jsonify({"access_token": access_token}), 200
 
-@app.route('/patients', methods=['POST'])
+#add patients to database
+
+def add_patients_to_db(name, age, gender, diagnosis):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('INSERT INTO patients (name, age, gender, diagnosis) VALUES (?, ?, ?, ?)', (name, age, gender, diagnosis))
+    conn.commit() 
+    conn.close() 
+
+@app.route('/add/patients', methods=['POST'])
 @jwt_required()
 def add_patients():
     claims = get_jwt()
@@ -248,15 +252,9 @@ def get_patients():
 def add_doctors_to_db(name, specialization , department):
     conn = get_db_connection()
     cursor = conn.cursor()
-    try:
-       cursor.execute('INSERT INTO doctors (name, specialization, department) VALUES(?,?,?)', (name, specialization, department))
-       conn.commit()
-
-    except sqlite3.Error:
-        cursor.rollback()
-        raise
-    finally:
-        conn.close()
+    cursor.execute('INSERT INTO doctors (name, specialization, department) VALUES(?,?,?)', (name, specialization, department))
+    conn.commit()
+    conn.close()
 
 @app.route('/add/doctor', methods=['POST'])
 @jwt_required()
@@ -264,7 +262,7 @@ def add_doctors():
     claims = get_jwt()
     if claims.get('role') != 'admin':
         return jsonify({'error': 'Admins only'}), 403
-    
+
     data = request.get_json(silent=True)
     if not data:
         return jsonify({'error': 'No data provided'}), 400
@@ -278,7 +276,120 @@ def add_doctors():
         add_doctors_to_db(name, specialization, department)
         return jsonify({'message': 'Doctor added successfully'}), 201
     except Exception as e:
-        return jsonify({'error': 'An error occurred while adding the doctor'}), 500         
+      print("ERROR:", e)
+      return jsonify({'error': str(e)}), 500
+
+@app.route('/get/doctors', methods=['GET'])
+@jwt_required()
+def get_doctors():
+    claims = get_jwt()
+    if claims.get('role') != 'admin':
+        return jsonify({'error': 'Admins only'}), 403
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM doctors')
+        doctors = cursor.fetchall()
+        return jsonify([dict(row) for row in doctors]), 200
+    except sqlite3.Error as e:
+        print("Database error:", e)
+        return jsonify({'error': 'Database error'}), 500
+
+    finally:
+        if conn:
+            conn.close()
+
+#delete doctors
+
+@app.route('/delete/doctor/<int:doctor_id>', methods=['DELETE'])
+@jwt_required() 
+def delete_doctor(doctor_id):
+    claims = get_jwt()
+    if claims.get('role') != 'admin':
+        return jsonify({'error': 'Admins only'}), 403
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM doctors WHERE id = ?', (doctor_id,))
+        conn.commit()
+
+        if cursor.rowcount == 0:
+            return jsonify({'error': 'Doctor not found'}), 404
+
+        return jsonify({'message': 'Doctor deleted successfully'}), 200
+    except sqlite3.Error as e:
+        print("Database error:", e)
+        return jsonify({'error': 'Database error'}), 500
+    finally:
+        if conn:
+            conn.close()  
+#get-doctor
+@app.route ('/get/doctor/<int:doctor_id>', methods=['GET'])
+@jwt_required()
+def get_doctor(doctor_id):
+    claims = get_jwt()
+    if claims.get('role') != 'admin':
+        return jsonify({'error': 'Admins only'}), 403
+
+    conn = None
+    try:    
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM doctors WHERE id = ?', (doctor_id,))
+        doctor = cursor.fetchone()
+        if not doctor:
+            return jsonify({'error': 'Doctor not found'}), 404
+        return jsonify(dict(doctor)), 200
+    except sqlite3.Error as e:
+        print("Database error:", e)
+        return jsonify({'error': 'Database error'}), 500
+    finally:
+        if conn:
+            conn.close()
+
+#update doctor
+@app.route('/update/doctor/<int:doctor_id>', methods=['PUT'])  
+@jwt_required()
+def update_doctor(doctor_id):
+    claims = get_jwt()
+    if claims.get('role') != 'admin':
+        return jsonify({'error': 'Admins only'}), 403
+
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    name = data.get('name', '')
+    specialization = data.get('specialization', '')
+    department = data.get('department', '')
+
+    if not name or not specialization or not department:
+        return jsonify({'error': 'Name, specialization, and department are required'}), 400
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('UPDATE doctors SET name = ?, specialization = ?, department = ? WHERE id = ?', (name, specialization, department, doctor_id))
+        conn.commit()
+
+        if cursor.rowcount == 0:
+            return jsonify({'error': 'Doctor not found'}), 404
+
+        return jsonify({'message': 'Doctor updated successfully'}), 200
+    except sqlite3.Error as e:
+        print("Database error:", e)
+        return jsonify({'error': 'Database error'}), 500
+    finally:
+        if conn:
+            conn.close()
+
+
+
 if __name__ == "__main__":
     init_db()
     app.run(debug=True)

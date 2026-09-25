@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <h2>Update Doctor</h2>
+    
+    <form id="updateDoctor">
+     <input type="text" id="doctor_name" placeholder="Name">
+    <input type="text" id="doctor_specialization" placeholder="Specialization"> 
+    <select id="department">
+                    <option value="" disabled selected>Department</option>
+                    <option value="neurology">Neurology Department</option>                   
+                     <option value="cardiology">Cardiology</option>
+                    <option value="dermatology">Dermatology</option>
+                    <option value="orthopedics">Orthopedics</option>    
+                    <option value="pediatrics">Pediatrics</option>
+                    <option value="gynecology">Gynecology</option>
+    </select>
+    <button type="submit">Update Doctor</button>
+</form>
+    <p id="updateDoctorStatus"></p>                
+    <script src="script.js"></script>
+</body>
+</html>

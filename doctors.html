@@ -9,23 +9,37 @@
     <h1>Add Doctors</h1>
     <input type="text" id="doctor_name" placeholder="Name">
     <input type="text" id="doctor_specialization" placeholder="Specialization"> 
-    <input type="text" id="department" placeholder="Department">
+    <select id="department">
+                    <option value="" disabled selected>Department</option>
+<option value="neurology">Neurology Department</option>                    <option value="cardiology">Cardiology</option>
+                    <option value="dermatology">Dermatology</option>
+                    <option value="orthopedics">Orthopedics</option>
+                    <option value="pediatrics">Pediatrics</option>
+                    <option value="gynecology">Gynecology</option>
+                    <option value="psychology">Psychology</option>
+                    <option value="general_medicine">General Medicine</option>
+                    <option value="surgery">Surgery</option>
+    </select>
     <button onclick="add_doctor()">Add Doctor</button>
     <p id="doctorStatus"></p>
 
     
     <h2>Doctors List</h2>
-    <table border="1">
+    <button onclick="get_doctors()">Load Doctors</button>
+    <table border="13">
         <thead>
             <tr>
                 <th>Name</th>
                 <th>Specialization</th>
                 <th>Department</th>
+                <th>Remove</th>
+                <th>Edit</th>
             </tr>
         </thead>
         <tbody id="doctorsTableBody">
         </tbody>
 
-    
+        <script src="script.js"></script>
+
 </body>
 </html>
