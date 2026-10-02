@@ -1,4 +1,6 @@
+from datetime import datetime
 import os
+from time import time
 from flask_bcrypt import Bcrypt
 import sqlite3
 from dotenv import load_dotenv
@@ -42,16 +44,7 @@ def init_db():
             diagnosis TEXT NOT NULL
         )
     ''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS appointments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            patient_id INTEGER NOT NULL,
-            doctor_id INTEGER NOT NULL,
-            appointment_date TEXT NOT NULL,
-            FOREIGN KEY (patient_id) REFERENCES patients (id) on DELETE CASCADE,
-            FOREIGN KEY (doctor_id) REFERENCES doctors (id) on DELETE CASCADE
-        )
-    ''')
+    
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS doctors (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,6 +53,18 @@ def init_db():
     department TEXT NOT NULL
 )
     ''')
+
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS appointments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        patient_id INTEGER NOT NULL,
+        doctor_id INTEGER NOT NULL,
+        appointment_date TEXT NOT NULL,
+        appointment_time TEXT NOT NULL,
+        FOREIGN KEY (patient_id) REFERENCES patients (id) ON DELETE CASCADE,
+        FOREIGN KEY (doctor_id) REFERENCES doctors (id) ON DELETE CASCADE
+    )
+''')
     conn.commit()
     conn.close()
 
@@ -198,8 +203,12 @@ def add_patients_to_db(name, age, gender, diagnosis):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('INSERT INTO patients (name, age, gender, diagnosis) VALUES (?, ?, ?, ?)', (name, age, gender, diagnosis))
-    conn.commit() 
-    conn.close() 
+    conn.commit()    
+    patient_id = cursor.lastrowid
+
+    conn.close()
+
+    return patient_id
 
 @app.route('/add/patients', methods=['POST'])
 @jwt_required()
@@ -227,8 +236,9 @@ def add_patients():
     if not (0 < age <= 150):
         return jsonify({"error": "Age must be a positive, realistic number"}), 400
 
-    add_patients_to_db(name, age, gender, diagnosis)
-    return jsonify({"message": "Patient added successfully"}), 201
+    patient_id = add_patients_to_db(name, age, gender, diagnosis)
+    return jsonify({"message": "Patient added successfully",
+                     "patient_id": f"{patient_id}"}), 201
 
 @app.route('/get/patients', methods=['GET'])
 @jwt_required()
@@ -249,6 +259,32 @@ def get_patients():
     finally:
         if conn:
             conn.close()
+
+@app.route('/delete/patient/<int:patient_id>', methods=['DELETE'])
+@jwt_required()
+def delete_patient(patient_id): 
+    
+    claims = get_jwt()
+    if claims.get("role") != "admin":
+        return jsonify({"error": "Admins only"}), 403
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM patients WHERE id = ?', (patient_id,))
+        conn.commit()
+
+        if cursor.rowcount == 0:
+            return jsonify({"error": "Patient not found"}), 404
+
+        return jsonify({"message": "Patient deleted successfully"}), 200
+    except sqlite3.Error:
+        return jsonify({"error": "Database error"}), 500
+    finally:
+        if conn:
+            conn.close()
+
 def add_doctors_to_db(name, specialization , department):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -282,9 +318,6 @@ def add_doctors():
 @app.route('/get/doctors', methods=['GET'])
 @jwt_required()
 def get_doctors():
-    claims = get_jwt()
-    if claims.get('role') != 'admin':
-        return jsonify({'error': 'Admins only'}), 403
 
     conn = None
     try:
@@ -388,7 +421,123 @@ def update_doctor(doctor_id):
         if conn:
             conn.close()
 
+@app.route('/add/appointments', methods=['POST'])
+@jwt_required()
+def add_appointments():
+    claims = get_jwt()
+    if claims.get('role') != 'admin':
+        return jsonify({'error': 'Admins only'}), 403
 
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+
+    patient_id = data.get('patient_id')
+    doctor_id = data.get('doctor_id')
+    appointment_date = data.get('appointment_date')
+    appointment_time = data.get('appointment_time')
+
+
+    if not patient_id or not doctor_id or not appointment_date or not appointment_time:
+        return jsonify({'error': 'Patient, doctor, date, and time are all required'}), 400
+
+    
+    conn = None
+  
+
+    try:
+       appointment_datetime = datetime.strptime(
+            f"{appointment_date} {appointment_time}",
+            "%Y-%m-%d %H:%M")
+
+       
+    except ValueError:
+        return jsonify({'error': 'Invalid date or time format'}), 400
+    if(appointment_datetime < datetime.now()):
+        return jsonify({'error': 'Appointment date and time must be in the future'}), 400
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT id FROM patients WHERE id = ?', (patient_id,))
+        if not cursor.fetchone():
+            return jsonify({'error': 'No patient found with that ID'}), 404
+
+        cursor.execute('SELECT id FROM doctors WHERE id = ?', (doctor_id,))
+        if not cursor.fetchone():
+            return jsonify({'error': 'No doctor found with that ID'}), 404
+
+        cursor.execute(
+            'INSERT INTO appointments (patient_id, doctor_id, appointment_date, appointment_time) VALUES (?, ?, ?, ?)',
+            (patient_id, doctor_id, appointment_date, appointment_time)
+        )
+        conn.commit()
+        return jsonify({'message': 'Appointment added successfully'}), 201
+    except sqlite3.Error as e:
+        print("Database error:", e)
+        return jsonify({'error': 'Database error'}), 500
+    finally:
+        if conn:
+            conn.close()
+            
+@app.route('/get/appointments', methods=['GET'])
+@jwt_required()     
+def get_appointments():
+    claims = get_jwt()
+    if claims.get('role') != 'admin':
+        return jsonify({'error': 'Admins only'}), 403
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT 
+                appointments.id,
+                patients.name AS patient_name,
+                doctors.name AS doctor_name,
+                appointments.appointment_date,
+                appointments.appointment_time
+            FROM appointments
+            JOIN patients ON appointments.patient_id = patients.id
+            JOIN doctors ON appointments.doctor_id = doctors.id
+        ''')
+        appointments = cursor.fetchall()
+        return jsonify([dict(row) for row in appointments]), 200
+    except sqlite3.Error as e:
+        print("Database error:", e)
+        return jsonify({"error": "Database error"}), 500
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/delete/appointment/<int:appointment_id>', methods=['DELETE'])
+@jwt_required()
+def delete_appointment(appointment_id):
+    claims = get_jwt()
+    if claims.get('role') != 'admin':
+        return jsonify({'error': 'Admins only'}), 403
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM appointments WHERE id = ?', (appointment_id,))
+        conn.commit()
+
+        if cursor.rowcount == 0:
+            return jsonify({'error': 'Appointment not found'}), 404
+
+        return jsonify({'message': 'Appointment deleted successfully'}), 200
+    except sqlite3.Error as e:
+        print("Database error:", e)
+        return jsonify({'error': 'Database error'}), 500
+    finally:
+        if conn:
+            conn.close() 
+    
 
 if __name__ == "__main__":
     init_db()

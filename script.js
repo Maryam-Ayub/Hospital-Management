@@ -107,7 +107,9 @@ async function add_patient() {
         body: JSON.stringify({ name, age, gender, diagnosis })
     });
     const data = await response.json();
+    console.log(data.patient_id);
     document.getElementById("addPatientStatus").innerText = data.message || data.error;
+    alert(`${name} has a patient ID  ${data.patient_id}`);
 }
 //get_Patients  
 
@@ -125,7 +127,22 @@ async function show_patients() {
             `<p>Error: ${data.error || data.message || "Could not load patients"}</p>`;
         return;
     }
-
+    const patientsTable = document.getElementById("patients-Table"); 
+    patientsTable.innerHTML=`
+    <table id="patients-Table" border="1" cellpadding="8" cellspacing="0">
+        <thead >
+            <tr>
+                <th>Name</th>
+                <th>Age</th>
+                <th>Gender</th>
+                <th>Diagnosis</th>
+                <th>Delete</th>
+            </tr>
+        </thead>
+        <tbody id="patientsTableBody">
+        </tbody>
+    </table>
+    `;
     const patientsList = document.getElementById("patientsTableBody");
     patientsList.innerHTML = "";
 
@@ -137,14 +154,43 @@ async function show_patients() {
                 <td>${patient.age}</td>
                 <td>${patient.gender}</td>
                 <td>${patient.diagnosis}</td>
+                <td><button onclick="delete_patient('${patient.id}')">Delete</button></td>
             `;
             patientsList.appendChild(patientrow);
         });
     } else {
-        patientsTableBody.innerHTML = "<p>No patients found.</p>";
+        document.getElementById("patientsTableBody").innerHTML = "<p>No patients found.</p>";
     }
 }
+
+//delete patient
+
+async function delete_patient(patientId) {
+        const confirmed = confirm("Are you sure you want to delete this patient?");
+
+    if (!confirmed) {
+        return;   // Cancel the deletion if the user clicks "Cancel"
+    }
+
+    const response = await fetch(BASE_URL + `/delete/patient/${patientId}`, {
+        method: "DELETE",
+        headers: {
+            "Authorization": "Bearer " + localStorage.getItem("access_token")
+        }
+    });
+    const data = await response.json();
+    if(!response.ok){
+        alert('Error: ' + (data.error || data.message || "Unknown error"));
+       return;
+    }
+   
+    show_patients()
+
+}
+
+
 // add doctors 
+
 async function add_doctor() {
     const name = document.getElementById("doctor_name").value.trim();
     const specialization = document.getElementById("doctor_specialization").value.trim();
@@ -177,12 +223,11 @@ async function get_doctors() {
     });
 
     console.log("STATUS:", response.status);
-
     const data = await response.json();
 
     console.log("DATA:", data);
 
-    const doctorsList = document.getElementById("doctorsTableBody");
+    const doctorsList = document.getElementById("doctors-Table");
 
     if (!response.ok) {
         doctorsList.innerHTML = `
@@ -196,7 +241,20 @@ async function get_doctors() {
     }
 
     doctorsList.innerHTML = "";
-
+    doctorsList.innerHTML = `
+        <table border="13">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Specialization</th>
+                <th>Department</th>
+                <th>Remove</th>
+                <th>Edit</th>
+            </tr>
+        </thead>
+        <tbody id="doctorsTableBody">
+        </tbody>
+    `;
     if (data.length === 0) {
         doctorsList.innerHTML = `
             <tr>
@@ -226,6 +284,11 @@ async function get_doctors() {
         `;
         doctorsList.appendChild(row);
     });
+    doctorsList.innerHTML += `
+            <tr>
+                <td colspan="5">close</td>
+            </tr>
+        `;
 }
 
 async function removeDoctor(doctorId) {
@@ -261,14 +324,10 @@ async function updateDoctor(doctorId) {
         }
     });
     const data = await response.json();
-    const name = document.getElementById("doctor_name").value = data.name;
-    const specialization = document.getElementById("doctor_specialization").value = data.specialization;
-    const department = document.getElementById("department").value = data.department;
+    document.getElementById("doctor_name").value = data.name;
+    document.getElementById("doctor_specialization").value = data.specialization;
+    document.getElementById("department").value = data.department;
 
-    if (!name || !specialization || !department) {
-        document.getElementById("updateDoctorStatus").innerText = "All fields are required";
-        return;
-    }
 
     document.getElementById("updateDoctor").addEventListener("submit", async (event) => {
         event.preventDefault();
@@ -278,9 +337,9 @@ async function updateDoctor(doctorId) {
             specialization: document.getElementById("doctor_specialization").value,
             department: document.getElementById("department").value
         };
-
+       
         const response = await fetch(BASE_URL + `/update/doctor/${doctorId}`, {
-            method: "PUT",
+            method: "PUT",                                    
             headers: {
                 "Authorization": "Bearer " + localStorage.getItem("access_token"),
                 "Content-Type": "application/json"
@@ -289,7 +348,6 @@ async function updateDoctor(doctorId) {
         });
 
         const data = await response.json();
-
         if (!response.ok) {
             document.getElementById("updateDoctorStatus").textContent = "Error: " + (data.error || data.message || "Could not update doctor");
             return;
@@ -297,4 +355,169 @@ async function updateDoctor(doctorId) {
 
         document.getElementById("updateDoctorStatus").textContent = data.message || "Doctor updated successfully";
     });
+}
+// Get doctor ID from URL
+const params = new URLSearchParams(window.location.search);
+const doctorId = params.get("id");
+
+// Start the update page
+if (doctorId) {
+    updateDoctor(doctorId);
+}
+
+// load doctors
+async function loadDoctors() {
+    const response = await fetch(BASE_URL + "/get/doctors", {
+        method: "GET",
+        headers: {
+            "Authorization": "Bearer " + localStorage.getItem("access_token")
+        }
+    });
+    const data = await response.json();
+    if (!response.ok) {
+        document.getElementById("doctorSelect").innerHTML = "<option value=''>Error loading doctors</option>";
+        return;
+    }
+    const doctorSelect = document.getElementById("doctorSelect");
+    doctorSelect.innerHTML = `<option value="" disabled selected>Select Doctor</option>`;
+    data.forEach(doctor => {
+        const option = document.createElement("option");
+        option.value = doctor.id;
+        option.textContent = `${doctor.name}-(${doctor.specialization})`;
+        doctorSelect.appendChild(option);
+    });
+}
+
+loadDoctors();
+
+window.onload = function() {
+    loadDoctors();
+
+    document.getElementById("appointmentForm").addEventListener("submit", function(event) {
+        event.preventDefault();
+        add_Appointments();
+    });
+};
+//add appointments
+async function add_Appointments(){
+    const patient_id = document.getElementById("patient_id").value.trim();
+    const doctor_id = document.getElementById("doctorSelect").value.trim();
+    const appointment_date = document.getElementById("appointment_date").value.trim();
+    const appointment_time = document.getElementById("appointment_time").value.trim();
+    if (!patient_id || !doctor_id ){
+        document.getElementById("appointmentStatus").innerText = "all fields are requred";
+        return;
+    }
+    const appointmentData = {
+        patient_id,
+        doctor_id,
+        appointment_date,
+        appointment_time
+    };
+    
+   
+    const response = await fetch(BASE_URL + "/add/appointments", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + localStorage.getItem("access_token")
+        },
+        body: JSON.stringify(appointmentData)
+    });
+    const data = await response.json();
+    if (!response.ok) {
+        document.getElementById("appointmentStatus").innerText = "Error: " + (data.error || data.message || "Could not add appointment");
+        return;
+    }
+    document.getElementById("appointmentStatus").innerText = data.message ||`Appointment added ${appointment_date} at ${appointment_time} successfully`;
+
+}
+ 
+
+async function get_appointments() {
+    const response = await fetch(BASE_URL + "/get/appointments", {
+        method: "GET",
+        headers: {
+            "Authorization": "Bearer " + localStorage.getItem("access_token")
+        }
+    });
+    const data = await response.json();
+
+    const appointmentsList = document.getElementById("appointmentsList");
+
+    if (!response.ok) {
+        appointmentsList.innerHTML = "<p>Error: " + (data.error || data.message || "Could not load appointments") + "</p>";
+        return;
+    }
+
+    // Step 1: insert the table skeleton (string ends here — backticks close properly)
+    appointmentsList.innerHTML = `
+        <table id="appointments-Table" border="1" cellpadding="8" cellspacing="0">
+            <thead>
+                <tr>
+                    <th>Patient Name</th>
+                    <th>Doctor Name</th>
+                    <th>Appointment Date</th>
+                    <th>Appointment Time</th>
+                    <th>Delete</th>
+                </tr>
+            </thead>
+            <tbody id="appointmentsTableBody"></tbody>
+
+   
+        </table>
+    `;
+
+    // Step 2: now we're back in normal JavaScript — this code actually runs
+    const tableBody = document.getElementById("appointmentsTableBody");
+
+    if (data.length === 0) {
+        tableBody.innerHTML = `<tr><td colspan="5">No appointments found.</td></tr>`;
+        return;
+    }
+
+    data.forEach(appointment => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+            <td>${appointment.patient_name}</td>
+            <td>${appointment.doctor_name}</td>
+            <td>${appointment.appointment_date}</td>
+            <td>${appointment.appointment_time}</td>
+            <td><button onclick="delete_appointment(${appointment.id})">Delete</button></td>
+        `;
+        tableBody.appendChild(row);
+        
+    });
+    
+    // After ALL appointments
+    appointmentsList.innerHTML += `
+    <button onclick="closeAppointments()">Close</button>
+    `;
+    
+}
+
+function closeAppointments() {
+    document.getElementById("appointmentsList").innerHTML = "";
+}
+
+async function delete_appointment(appointmentId) {
+    const confirmed = confirm("Are you sure you want to delete this appointment?");
+
+    if (!confirmed) {
+        return;   
+    }
+
+    const response = await fetch(BASE_URL + `/delete/appointment/${appointmentId}`, {
+        method: "DELETE",
+        headers: {
+            "Authorization": "Bearer " + localStorage.getItem("access_token")
+        }
+    });
+    const data = await response.json();
+    if (!response.ok) {
+        alert("Error: " + (data.error || data.message || "Could not delete appointment"));
+        return;
+    }
+   
+    get_appointments();
 }
