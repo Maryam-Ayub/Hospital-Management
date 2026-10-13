@@ -3,8 +3,11 @@ import os
 from time import time
 from flask_bcrypt import Bcrypt
 import sqlite3
+import uuid
+import sqlite3
 from dotenv import load_dotenv
-from flask import Flask, request , jsonify
+from flask import Flask, request , jsonify,send_file, send_from_directory
+from PIL import Image, UnidentifiedImageError   
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager,create_access_token, get_jwt, jwt_required, get_jwt_identity
 load_dotenv()
@@ -14,6 +17,19 @@ app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY')
 bcrypt = Bcrypt(app)
 jwt = JWTManager(app)
 
+UPLOAD_FOLDER = os.path.join(app.root_path, "uploads")
+DATABASE_PATH = os.path.join(app.root_path, "database.db")
+
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+MAX_IMAGE_SIZE = 5 * 1024 * 1024
+app.config["MAX_CONTENT_LENGTH"] = MAX_IMAGE_SIZE
+
+ALLOWED_FORMATS = {
+    "JPEG": "jpg",
+    "PNG": "png",
+    "WEBP": "webp"
+}
 
 def init_db():
     # Initialize your database connection here
@@ -41,7 +57,10 @@ def init_db():
             name TEXT NOT NULL,
             age INTEGER NOT NULL,
             gender TEXT NOT NULL,
-            diagnosis TEXT NOT NULL
+            diagnosis TEXT NOT NULL,
+            phone TEXT NOT NULL,
+            email TEXT NOT NULL,
+            profile_image TEXT
         )
     ''')
     
@@ -199,10 +218,10 @@ def admin_login():
 
 #add patients to database
 
-def add_patients_to_db(name, age, gender, diagnosis):
+def add_patients_to_db(name, age, gender, diagnosis, phone, email):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('INSERT INTO patients (name, age, gender, diagnosis) VALUES (?, ?, ?, ?)', (name, age, gender, diagnosis))
+    cursor.execute('INSERT INTO patients (name, age, gender, diagnosis, phone, email) VALUES (?, ?, ?, ?, ?, ?)', (name, age, gender, diagnosis, phone, email))
     conn.commit()    
     patient_id = cursor.lastrowid
 
@@ -225,8 +244,10 @@ def add_patients():
     age = data.get('age', '')
     gender = data.get('gender', '')
     diagnosis = data.get('diagnosis', '')
-    if not name or not gender or not diagnosis:
-        return jsonify({"error": "Name, gender, and diagnosis are required"}), 400
+    phone = data.get('phone', '')
+    email = data.get('email', '')
+    if not name or not gender or not diagnosis or not phone or not email:
+        return jsonify({"error": "All fields are required"}), 400
 
     try:
         age = int(age)
@@ -236,7 +257,7 @@ def add_patients():
     if not (0 < age <= 150):
         return jsonify({"error": "Age must be a positive, realistic number"}), 400
 
-    patient_id = add_patients_to_db(name, age, gender, diagnosis)
+    patient_id = add_patients_to_db(name, age, gender, diagnosis, phone, email)
     return jsonify({"message": "Patient added successfully",
                      "patient_id": f"{patient_id}"}), 201
 
@@ -468,6 +489,21 @@ def add_appointments():
         cursor.execute('SELECT id FROM doctors WHERE id = ?', (doctor_id,))
         if not cursor.fetchone():
             return jsonify({'error': 'No doctor found with that ID'}), 404
+        cursor.execute(
+            '''
+            SELECT id
+            FROM appointments
+            WHERE doctor_id = ?
+              AND appointment_date = ?
+              AND appointment_time = ?
+            ''',
+            (doctor_id, appointment_date, appointment_time)
+        )
+
+        if cursor.fetchone():
+            return jsonify({
+                'error': 'This doctor already has an appointment at this date and time'
+            }), 409
 
         cursor.execute(
             'INSERT INTO appointments (patient_id, doctor_id, appointment_date, appointment_time) VALUES (?, ?, ?, ?)',
@@ -537,7 +573,121 @@ def delete_appointment(appointment_id):
     finally:
         if conn:
             conn.close() 
-    
+# profile image adding code
+@app.route("/patient/profile-image", methods=["POST"])
+@jwt_required()
+def upload_profile_image():
+    # 1. Identify the logged-in account.
+    identity = get_jwt_identity()
+
+    # Assumption: JWT identity is the patient's email.
+    # Find the corresponding patient in the database.
+    conn = sqlite3.connect(DATABASE_PATH)
+    conn.row_factory = sqlite3.Row
+
+    try:
+        patient = conn.execute(
+            "SELECT id FROM patients WHERE email = ?",
+            (identity,)
+        ).fetchone()
+
+        if patient is None:
+            return jsonify({
+                "error": "No patient account matches this login."
+            }), 404
+
+        patient_id = patient["id"]
+
+        # 2. Get the uploaded file.
+        image_file = request.files.get("profile_image")
+
+        if image_file is None or not image_file.filename:
+            return jsonify({
+                "error": "Please select an image first."
+            }), 400
+
+        # 3. Check the actual image format using Pillow.
+        try:
+            image_file.stream.seek(0)
+
+            with Image.open(image_file.stream) as img:
+                image_format = img.format
+
+                if image_format not in ALLOWED_FORMATS:
+                    return jsonify({
+                        "error": "Only JPG, PNG, and WebP are allowed."
+                    }), 400
+
+                # Verify that the file is a valid image.
+                img.verify()
+
+            # Reopen after verify(), then decode and re-encode it.
+            image_file.stream.seek(0)
+
+            with Image.open(image_file.stream) as img:
+                img.load()
+
+                # Normalize the mode for safe image output.
+                if image_format == "JPEG":
+                    img = img.convert("RGB")
+                elif image_format == "PNG":
+                    img = img.convert("RGBA")
+                else:
+                    img = img.convert("RGB")
+
+                extension = ALLOWED_FORMATS[image_format]
+                filename = f"{uuid.uuid4().hex}.{extension}"
+                file_path = os.path.join(UPLOAD_FOLDER, filename)
+
+                # Save a newly encoded image, not the original bytes.
+                img.save(file_path, format=image_format)
+
+        except (UnidentifiedImageError, OSError, ValueError):
+            return jsonify({
+                "error": "The uploaded file is not a valid image."
+            }), 400
+
+        # 4. Save the image path in the patient's database record.
+        image_url = f"/uploads/{filename}"
+
+        try:
+            conn.execute(
+                "UPDATE patients SET profile_image = ? WHERE id = ?",
+                (image_url, patient_id)
+            )
+            conn.commit()
+
+        except sqlite3.Error:
+            # Avoid leaving an orphaned file if the DB update fails.
+            if os.path.exists(file_path):
+                os.remove(file_path)
+
+            return jsonify({
+                "error": "Could not save the image path."
+            }), 500
+
+        return jsonify({
+            "message": "Profile picture uploaded successfully.",
+            "profile_image": image_url
+        }), 200
+
+    finally:
+        conn.close()
+
+
+# Let the browser retrieve saved images.
+@app.route("/uploads/<path:filename>", methods=["GET"])
+def get_uploaded_image(filename):
+    return send_from_directory(UPLOAD_FOLDER, filename)
+
+
+# Return a friendly response when the whole request exceeds the limit.
+@app.errorhandler(413)
+def request_too_large(error):
+    return jsonify({
+        "error": "Image upload is too large. Maximum size is 5 MB."
+    }), 413
+
 
 if __name__ == "__main__":
     init_db()

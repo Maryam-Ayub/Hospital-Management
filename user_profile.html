@@ -1,0 +1,80 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Patient Profile</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <header>
+        <h1>Patient Profile</h1>
+        <button id="logoutBtn">Logout</button>
+    </header>
+
+    <main>
+        <!-- Patient Personal Information -->
+        <section id="profileSection">
+            <h2>Personal Information</h2>
+
+            <img
+                id="profileImage"
+                src="default-avatar.png"
+                alt="Patient profile picture"
+                width="120"
+                style="cursor: pointer;"
+                onclick="document.getElementById('imageInput').click()"
+            >
+            <input
+                type="file"
+                id="imageInput"
+                accept="image/*"
+                hidden
+            >
+
+            <p><strong>Patient ID:</strong> <span id="patientId">Loading...</span></p>
+            <p><strong>Name:</strong> <span id="patientName">Loading...</span></p>
+            <p><strong>Age:</strong> <span id="patientAge">Loading...</span></p>
+            <p><strong>Gender:</strong> <span id="patientGender">Loading...</span></p>
+            <p><strong>Phone:</strong> <span id="patientPhone">Loading...</span></p>
+            <p><strong>Email:</strong> <span id="patientEmail">Loading...</span></p>
+
+            <button id="editProfileBtn">Edit Profile</button>
+        </section>
+
+        <!-- Patient Appointments -->
+        <section id="appointmentsSection">
+            <h2>My Appointments</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Doctor</th>
+                        <th>Specialization</th>
+                        <th>Date</th>
+                        <th>Time</th>
+                    </tr>
+                </thead>
+
+                <tbody id="appointmentsTableBody">
+                    <tr>
+                        <td colspan="4">Loading appointments...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- Medical Information -->
+        <section id="medicalSection">
+            <h2>Medical Information</h2>
+            <p><strong>Diagnosis:</strong> <span id="patientDiagnosis">Loading...</span></p>
+        </section>
+
+    </main>
+
+    <script src="script.js"></script>
+</body>
+</html>
+```
