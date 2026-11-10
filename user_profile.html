@@ -1,51 +1,162 @@
 ```html
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Patient Profile</title>
+
+    <title>Edit Profile</title>
+
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
     <header>
-        <h1>Patient Profile</h1>
-        <button id="logoutBtn">Logout</button>
+        <h1>Edit Profile</h1>
+        <button type="button" id="logoutBtn">Logout</button>
     </header>
 
     <main>
+
+        <!-- Patient Account Information -->
+        <section id="accountSection">
+
+            <h2>Account Information</h2>
+
+            <p>
+                <strong>Username:</strong>
+                <span id="username">Loading...</span>
+            </p>
+
+        </section>
+
+
         <!-- Patient Personal Information -->
         <section id="profileSection">
+
             <h2>Personal Information</h2>
 
+            <!-- Profile Picture -->
             <img
                 id="profileImage"
                 src="default-avatar.png"
                 alt="Patient profile picture"
                 width="120"
                 style="cursor: pointer;"
-                onclick="document.getElementById('imageInput').click()"
             >
+
             <input
                 type="file"
                 id="imageInput"
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp"
                 hidden
             >
 
-            <p><strong>Patient ID:</strong> <span id="patientId">Loading...</span></p>
-            <p><strong>Name:</strong> <span id="patientName">Loading...</span></p>
-            <p><strong>Age:</strong> <span id="patientAge">Loading...</span></p>
-            <p><strong>Gender:</strong> <span id="patientGender">Loading...</span></p>
-            <p><strong>Phone:</strong> <span id="patientPhone">Loading...</span></p>
-            <p><strong>Email:</strong> <span id="patientEmail">Loading...</span></p>
+            <p id="imageStatus"></p>
 
-            <button id="editProfileBtn">Edit Profile</button>
+            <button type="button" id="saveImageBtn" onclick="saveImage()">
+                Save Image
+            </button>
+
+
+            <!-- Patient Details Form -->
+           <!-- ================= VIEW MODE ================= -->
+
+<div id="viewMode">
+
+    <h3>Personal Details</h3>
+    <p><strong>ID</strong>
+    <span id="patientId">Not created yet</span>
+    </p>
+
+    <p><strong>Full Name:</strong>
+        <span id="displayPatientName">Not added yet</span>
+    </p>
+
+    <p><strong>Age:</strong>
+        <span id="displayPatientAge">Not added yet</span>
+    </p>
+
+    <p><strong>Gender:</strong>
+        <span id="displayPatientGender">Not added yet</span>
+    </p>
+
+    <p><strong>Phone:</strong>
+        <span id="displayPatientPhone">Not added yet</span>
+    </p>
+
+    <p><strong>Email:</strong>
+        <span id="displayPatientEmail">Not added yet</span>
+    </p>
+
+    <button type="button" id="editProfileBtn">
+        Edit Profile
+    </button>
+
+</div>
+
+
+<!-- ================= EDIT MODE ================= -->
+
+<div id="editMode" hidden>
+
+    <h3>Edit Personal Details</h3>
+
+    <form id="profileForm" onsubmit="savePatientProfile(event)">
+
+        <label for="patientName">Full Name:</label>
+        <input type="text" id="patientName" required>
+
+        <br><br>
+
+        <label for="patientAge">Age:</label>
+        <input type="number" id="patientAge"
+               min="0" max="150" required>
+
+        <br><br>
+
+        <label for="patientGender">Gender:</label>
+        <select id="patientGender" required>
+            <option value="">Select Gender</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+            <option value="Other">Other</option>
+        </select>
+
+        <br><br>
+
+        <label for="patientPhone">Phone:</label>
+        <input type="tel" id="patientPhone" required>
+
+        <br><br>
+
+        <label for="patientEmail">Email:</label>
+        <input type="email" id="patientEmail" required>
+
+        <br><br>
+
+        <button type="submit" id="saveProfileButton">
+            Save Changes
+        </button>
+
+        <button type="button" id="cancelEditBtn">
+            Cancel
+        </button>
+
+        <p id="profileStatus"></p>
+
+    </form>
+
+</div>
+
         </section>
+
 
         <!-- Patient Appointments -->
         <section id="appointmentsSection">
+
             <h2>My Appointments</h2>
 
             <table>
@@ -63,18 +174,28 @@
                         <td colspan="4">Loading appointments...</td>
                     </tr>
                 </tbody>
+
             </table>
+
         </section>
+
 
         <!-- Medical Information -->
         <section id="medicalSection">
+
             <h2>Medical Information</h2>
-            <p><strong>Diagnosis:</strong> <span id="patientDiagnosis">Loading...</span></p>
+
+            <p>
+                <strong>Diagnosis:</strong>
+                <span id="patientDiagnosis">Not available</span>
+            </p>
+
         </section>
 
     </main>
 
     <script src="script.js"></script>
+
 </body>
 </html>
 ```

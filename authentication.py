@@ -31,10 +31,12 @@ ALLOWED_FORMATS = {
     "WEBP": "webp"
 }
 
+
+
 def init_db():
-    # Initialize your database connection here
     conn = sqlite3.connect('database.db')
     cursor = conn.cursor()
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -42,6 +44,7 @@ def init_db():
             password TEXT NOT NULL
         )
     ''')
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS admins (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -63,32 +66,56 @@ def init_db():
             profile_image TEXT
         )
     ''')
-    
+
+    # Check existing patient columns
+    cursor.execute("PRAGMA table_info(patients)")
+    columns = [row[1] for row in cursor.fetchall()]
+
+    # Add missing columns only
+    if "phone" not in columns:
+        cursor.execute("ALTER TABLE patients ADD COLUMN phone TEXT")
+
+    if "email" not in columns:
+        cursor.execute("ALTER TABLE patients ADD COLUMN email TEXT")
+
+    if "profile_image" not in columns:
+        cursor.execute("ALTER TABLE patients ADD COLUMN profile_image TEXT")
+
+    if "user_id" not in columns:
+        cursor.execute("""
+            ALTER TABLE patients
+            ADD COLUMN user_id INTEGER REFERENCES users(id)
+        """)
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS doctors (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    specialization TEXT NOT NULL,
-    department TEXT NOT NULL
-)
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            specialization TEXT NOT NULL,
+            department TEXT NOT NULL
+        )
     ''')
 
     cursor.execute('''
-    CREATE TABLE IF NOT EXISTS appointments (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        patient_id INTEGER NOT NULL,
-        doctor_id INTEGER NOT NULL,
-        appointment_date TEXT NOT NULL,
-        appointment_time TEXT NOT NULL,
-        FOREIGN KEY (patient_id) REFERENCES patients (id) ON DELETE CASCADE,
-        FOREIGN KEY (doctor_id) REFERENCES doctors (id) ON DELETE CASCADE
-    )
-''')
+        CREATE TABLE IF NOT EXISTS appointments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            patient_id INTEGER NOT NULL,
+            doctor_id INTEGER NOT NULL,
+            appointment_date TEXT NOT NULL,
+            appointment_time TEXT NOT NULL,
+            FOREIGN KEY (patient_id) REFERENCES patients (id)
+                ON DELETE CASCADE,
+            FOREIGN KEY (doctor_id) REFERENCES doctors (id)
+                ON DELETE CASCADE
+        )
+    ''')
+
     conn.commit()
     conn.close()
 
+
 def get_db_connection():
-    conn = sqlite3.connect('database.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
@@ -134,7 +161,7 @@ def login():
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        cursor.execute(
+        cursor.execute(             
             'SELECT * FROM users WHERE username = ?',
             (username,)
         )
@@ -573,123 +600,333 @@ def delete_appointment(appointment_id):
     finally:
         if conn:
             conn.close() 
-# profile image adding code
-@app.route("/patient/profile-image", methods=["POST"])
-@jwt_required()
-def upload_profile_image():
-    # 1. Identify the logged-in account.
-    identity = get_jwt_identity()
 
-    # Assumption: JWT identity is the patient's email.
-    # Find the corresponding patient in the database.
-    conn = sqlite3.connect(DATABASE_PATH)
-    conn.row_factory = sqlite3.Row
+
+# ==========================================
+# PATIENT PROFILE
+# ==========================================
+
+@app.route('/patient/profile', methods=['GET'])
+@jwt_required()
+def get_patient_profile():
+    username = get_jwt_identity()
+
+    conn = get_db_connection()
 
     try:
-        patient = conn.execute(
-            "SELECT id FROM patients WHERE email = ?",
-            (identity,)
-        ).fetchone()
+        cursor = conn.cursor()
+        
 
-        if patient is None:
-            return jsonify({
-                "error": "No patient account matches this login."
-            }), 404
+        # Find logged-in user
+        cursor.execute(
+            "SELECT id, username FROM users WHERE username = ?",
+            (username,)
+        )
 
-        patient_id = patient["id"]
+        user = cursor.fetchone()
 
-        # 2. Get the uploaded file.
-        image_file = request.files.get("profile_image")
+        if not user:
+            return jsonify({"error": "User not found"}), 404
 
-        if image_file is None or not image_file.filename:
-            return jsonify({
-                "error": "Please select an image first."
-            }), 400
+        # Find patient profile belonging to this user
+        cursor.execute("""
+            SELECT
+                id,
+                name,
+                age,
+                gender,
+                diagnosis,
+                phone,
+                email,
+                profile_image
+            FROM patients
+            WHERE user_id = ?
+            ORDER BY id
+            LIMIT 1
+        """, (user["id"],))
 
-        # 3. Check the actual image format using Pillow.
-        try:
-            image_file.stream.seek(0)
+        patient = cursor.fetchone()
 
-            with Image.open(image_file.stream) as img:
-                image_format = img.format
+        profile_data = None
 
-                if image_format not in ALLOWED_FORMATS:
-                    return jsonify({
-                        "error": "Only JPG, PNG, and WebP are allowed."
-                    }), 400
+        if patient:
+            profile_data = dict(patient)
 
-                # Verify that the file is a valid image.
-                img.verify()
-
-            # Reopen after verify(), then decode and re-encode it.
-            image_file.stream.seek(0)
-
-            with Image.open(image_file.stream) as img:
-                img.load()
-
-                # Normalize the mode for safe image output.
-                if image_format == "JPEG":
-                    img = img.convert("RGB")
-                elif image_format == "PNG":
-                    img = img.convert("RGBA")
-                else:
-                    img = img.convert("RGB")
-
-                extension = ALLOWED_FORMATS[image_format]
-                filename = f"{uuid.uuid4().hex}.{extension}"
-                file_path = os.path.join(UPLOAD_FOLDER, filename)
-
-                # Save a newly encoded image, not the original bytes.
-                img.save(file_path, format=image_format)
-
-        except (UnidentifiedImageError, OSError, ValueError):
-            return jsonify({
-                "error": "The uploaded file is not a valid image."
-            }), 400
-
-        # 4. Save the image path in the patient's database record.
-        image_url = f"/uploads/{filename}"
-
-        try:
-            conn.execute(
-                "UPDATE patients SET profile_image = ? WHERE id = ?",
-                (image_url, patient_id)
-            )
-            conn.commit()
-
-        except sqlite3.Error:
-            # Avoid leaving an orphaned file if the DB update fails.
-            if os.path.exists(file_path):
-                os.remove(file_path)
-
-            return jsonify({
-                "error": "Could not save the image path."
-            }), 500
+            if patient["profile_image"]:
+                profile_data["image_url"] = (
+                    "/uploads/" + patient["profile_image"]
+                )
+            else:
+                profile_data["image_url"] = None
 
         return jsonify({
-            "message": "Profile picture uploaded successfully.",
-            "profile_image": image_url
+            "username": username,
+            "patient": profile_data
         }), 200
+
+    except sqlite3.Error as e:
+        print("Profile loading error:", e)
+        return jsonify({"error": "Database error"}), 500
 
     finally:
         conn.close()
 
 
-# Let the browser retrieve saved images.
-@app.route("/uploads/<path:filename>", methods=["GET"])
-def get_uploaded_image(filename):
+# ==========================================
+# SAVE / UPDATE PATIENT PROFILE
+# ==========================================
+
+@app.route('/patient/profile', methods=['POST'])
+@jwt_required()
+def save_patient_profile():
+
+    username = get_jwt_identity()
+
+    data = request.get_json(silent=True) or {}
+
+    name = data.get("name", "").strip()
+    age = data.get("age")
+    gender = data.get("gender", "").strip()
+    phone = data.get("phone", "").strip()
+    email = data.get("email", "").strip()
+
+    # Validate required fields
+    if not all([name, age is not None, gender, phone, email]):
+        return jsonify({
+            "error": "All profile fields are required"
+        }), 400
+
+    try:
+        age = int(age)
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid age"}), 400
+
+    if not 0 <= age <= 150:
+        return jsonify({"error": "Age must be between 0 and 150"}), 400
+
+    if gender not in ["Male", "Female", "Other"]:
+        return jsonify({"error": "Invalid gender"}), 400
+
+    conn = get_db_connection()
+
+    try:
+        cursor = conn.cursor()
+
+        # Get logged-in user's ID
+        cursor.execute(
+            "SELECT id FROM users WHERE username = ?",
+            (username,)
+        )
+
+        user = cursor.fetchone()
+
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+
+        user_id = user["id"]
+
+        # Check whether this user already has a patient profile
+        cursor.execute("""
+            SELECT id
+            FROM patients
+            WHERE user_id = ?
+            ORDER BY id
+            LIMIT 1
+        """, (user_id,))
+
+        patient = cursor.fetchone()
+
+        if patient:
+
+            # Update existing profile
+            cursor.execute("""
+                UPDATE patients
+                SET name = ?,
+                    age = ?,
+                    gender = ?,
+                    phone = ?,
+                    email = ?
+                WHERE id = ?
+            """, (
+                name,
+                age,
+                gender,
+                phone,
+                email,
+                patient["id"]
+            ))
+
+            patient_id = patient["id"]
+
+            message = "Profile updated successfully"
+
+        else:
+
+            # Create a new patient profile
+            cursor.execute("""
+                INSERT INTO patients
+                (name, age, gender, diagnosis, phone, email, user_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                name,
+                age,
+                gender,
+                "",
+                phone,
+                email,
+                user_id
+            ))
+
+            patient_id = cursor.lastrowid
+
+            message = "Profile saved successfully"
+
+        conn.commit()
+
+        return jsonify({
+            "message": message,
+            "patient_id": patient_id
+        }), 200
+
+    except sqlite3.Error as e:
+        conn.rollback()
+        print("Profile saving error:", e)
+
+        return jsonify({"error": "Database error"}), 500
+
+    finally:
+        conn.close()
+
+
+# ==========================================
+# SAVE PROFILE IMAGE
+# ==========================================
+
+@app.route('/patient/profile-image', methods=['POST'])
+@jwt_required()
+def save_profile_image():
+
+    username = get_jwt_identity()
+
+    if "image" not in request.files:
+        return jsonify({"error": "No image selected"}), 400
+
+    image_file = request.files["image"]
+
+    if not image_file or image_file.filename == "":
+        return jsonify({"error": "Please select an image"}), 400
+
+    conn = get_db_connection()
+
+    try:
+        cursor = conn.cursor()
+
+        # Get logged-in user's ID
+        cursor.execute(
+            "SELECT id FROM users WHERE username = ?",
+            (username,)
+        )
+
+        user = cursor.fetchone()
+
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+
+        # A patient profile must exist before uploading its picture
+        cursor.execute("""
+            SELECT id, profile_image
+            FROM patients
+            WHERE user_id = ?
+            ORDER BY id
+            LIMIT 1
+        """, (user["id"],))
+
+        patient = cursor.fetchone()
+
+        if not patient:
+            return jsonify({
+                "error": "Please save your patient profile first"
+            }), 404
+
+        # Validate actual image format using Pillow
+        try:
+            image = Image.open(image_file.stream)
+
+            image_format = image.format
+
+            if image_format not in ALLOWED_FORMATS:
+                return jsonify({
+                    "error": "Only JPEG, PNG and WEBP images are allowed"
+                }), 400
+
+            image.verify()
+            image_file.stream.seek(0)
+
+        except (UnidentifiedImageError, OSError, ValueError):
+            return jsonify({"error": "Invalid image file"}), 400
+
+        # Generate a unique filename
+        extension = ALLOWED_FORMATS[image_format]
+
+        filename = f"{uuid.uuid4().hex}.{extension}"
+
+        image_path = os.path.join(UPLOAD_FOLDER, filename)
+
+        # Save image inside uploads folder
+        image_file.save(image_path)
+
+        old_image = patient["profile_image"]
+
+        try:
+            # Update database with new image filename
+            cursor.execute("""
+                UPDATE patients
+                SET profile_image = ?
+                WHERE id = ?
+            """, (filename, patient["id"]))
+
+            conn.commit()
+
+        except sqlite3.Error:
+            conn.rollback()
+
+            if os.path.exists(image_path):
+                os.remove(image_path)
+
+            raise
+
+        # Delete old image after successful database update
+        if old_image:
+            old_image_path = os.path.join(
+                UPLOAD_FOLDER,
+                os.path.basename(old_image)
+            )
+
+            if os.path.isfile(old_image_path):
+                os.remove(old_image_path)
+
+        return jsonify({
+            "message": "Profile picture saved successfully",
+            "image_url": "/uploads/" + filename
+        }), 200
+
+    except sqlite3.Error as e:
+        print("Image saving error:", e)
+        return jsonify({"error": "Database error"}), 500
+
+    finally:
+        conn.close()
+
+
+# ==========================================
+# DISPLAY PROFILE IMAGE
+# ==========================================
+
+@app.route('/uploads/<filename>', methods=['GET'])
+def get_profile_image(filename):
+
+    # Only serve files from the uploads directory
     return send_from_directory(UPLOAD_FOLDER, filename)
-
-
-# Return a friendly response when the whole request exceeds the limit.
-@app.errorhandler(413)
-def request_too_large(error):
-    return jsonify({
-        "error": "Image upload is too large. Maximum size is 5 MB."
-    }), 413
-
-
 if __name__ == "__main__":
     init_db()
     app.run(debug=True)
-   
